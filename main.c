@@ -29,10 +29,6 @@ int main(int argc, char** argv) {
     sa.sa_flags = SA_RESTART;
 
     loadUsers("users.txt");
-
-    for (int i = 0; i < userCount; i++) {
-        printf("%s %s\n", users[i].id, users[i].password);
-    }
    
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         perror("sigaction");
@@ -83,8 +79,6 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                printf("Received data : %s\n", mesg);
-
                 handleClientMessage(csock, mesg);
                 
                 if (strncmp(mesg, "exit", 4) == 0) {
@@ -97,8 +91,6 @@ int main(int argc, char** argv) {
         }
 
     } while(1);
-
-    saveUsers("users.txt");
 
     close(ssock);
 
