@@ -1,0 +1,15 @@
+# Vim swap files
+*.swp
+*.swo
+*.swn
+
+# Vim backup files
+*.bak
+*.tmp
+*.temp
+
+# Vim undo files
+*.un~
+
+# build 폴더 무시
+build/
