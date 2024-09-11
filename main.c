@@ -101,17 +101,22 @@ void handleClientMessage(int csock, const char* message) {
     char cmd[10], id[50], password[50];
     sscanf(message, "%[^:]:%s %s", cmd, id, password);
 
+    int num;
     if (strcmp(cmd, "LOGIN") == 0) {
         if (loginUser(id, password)) {
-            write(csock, "LOGIN_SUCCESS", strlen("LOGIN_SUCCESS"));
+            num = 1;
+            write(csock, &num, sizeof(int));
         } else {
-            write(csock, "LOGIN_FAIL", strlen("LOGIN_FAIL"));
+            num = 0;
+            write(csock, &num, sizeof(int));
         }
     } else if (strcmp(cmd, "SIGNUP") == 0) {
         if (signupUser(id, password)) {
-            write(csock, "SIGNUP_SUCCESS", strlen("SIGNUP_SUCCESS"));
+            num = 1;
+            write(csock, &num, sizeof(int));
         } else {
-            write(csock, "SIGNUP_FAIL", strlen("SIGNUP_FAIL"));
+            num = 0;
+            write(csock, &num, sizeof(int));
         }
     }
 }
