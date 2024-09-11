@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "membermanager.h"
 
@@ -23,4 +24,25 @@ void saveUsers(const char* filename) {
     }
 
     fclose(file);
+}
+
+int loginUser(const char* id, const char* password) {
+    for (int i = 0; i < userCount; i++) {
+        if (strcmp(users[i].id, id) == 0 && strcmp(users[i].password, password) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+int signupUser(const char* id, const char* password) {
+    for (int i = 0; i < userCount; i++) {
+        if (strcmp(users[i].id, id) == 0) return 0;
+    }
+
+    strcpy(users[userCount].id, id);
+    strcpy(users[userCount].password, password);
+    userCount++;
+
+    saveUsers("users.txt");
+    return 1;
 }

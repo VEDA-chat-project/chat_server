@@ -15,6 +15,8 @@ void sigchld_handler(int signum) {
     while (waitpid(0, NULL, WNOHANG) > 0);
 }
 
+void handleClientMessage(int csock, const char* message);
+
 int main(int argc, char** argv) {
     int ssock;
     socklen_t clen;
@@ -27,6 +29,10 @@ int main(int argc, char** argv) {
     sa.sa_flags = SA_RESTART;
 
     loadUsers("users.txt");
+
+    for (int i = 0; i < userCount; i++) {
+        printf("%s %s\n", users[i].id, users[i].password);
+    }
    
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         perror("sigaction");
@@ -78,14 +84,12 @@ int main(int argc, char** argv) {
                 }
 
                 printf("Received data : %s\n", mesg);
+
+                handleClientMessage(csock, mesg);
+                
                 if (strncmp(mesg, "exit", 4) == 0) {
                     close(csock);
                     break;
-                }
-
-                if (write(csock, mesg, n) <= 0) {
-                    perror("write()");
-                    exit(1);
                 }
             }
 
@@ -99,4 +103,23 @@ int main(int argc, char** argv) {
     close(ssock);
 
     return 0;
+}
+
+void handleClientMessage(int csock, const char* message) {
+    char cmd[10], id[50], password[50];
+    sscanf(message, "%[^:]:%s %s", cmd, id, password);
+
+    if (strcmp(cmd, "LOGIN") == 0) {
+        if (loginUser(id, password)) {
+            write(csock, "LOGIN_SUCCESS", strlen("LOGIN_SUCCESS"));
+        } else {
+            write(csock, "LOGIN_FAIL", strlen("LOGIN_FAIL"));
+        }
+    } else if (strcmp(cmd, "SIGNUP") == 0) {
+        if (signupUser(id, password)) {
+            write(csock, "SIGNUP_SUCCESS", strlen("SIGNUP_SUCCESS"));
+        } else {
+            write(csock, "SIGNUP_FAIL", strlen("SIGNUP_FAIL"));
+        }
+    }
 }
