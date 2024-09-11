@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 
+#include "membermanager.h"
+
 #define TCP_PORT 5100
 
 void sigchld_handler(int signum) {
@@ -24,6 +26,8 @@ int main(int argc, char** argv) {
     sigfillset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
 
+    loadUsers("users.txt");
+   
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         perror("sigaction");
         exit(1);
@@ -54,6 +58,8 @@ int main(int argc, char** argv) {
         perror("listen()");
         exit(1);
     }
+
+
 
     clen = sizeof(cliaddr);
     do {
@@ -87,6 +93,8 @@ int main(int argc, char** argv) {
         }
 
     } while(1);
+
+    saveUsers("users.txt");
 
     close(ssock);
 
