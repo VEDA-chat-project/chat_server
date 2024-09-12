@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -31,17 +33,27 @@ int main(int argc, char** argv) {
     pid_t pid;
     char mesg[BUFSIZ];
 
-    struct sigaction sa;
-    sa.sa_handler = sigchld_handler;
-    sigfillset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-
-    loadUsers("users.txt");
+    struct sigaction sa_chld;
+    sa_chld.sa_handler = sigchld_handler;
+    sigfillset(&sa_chld.sa_mask);
+    sa_chld.sa_flags = SA_RESTART;
    
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        perror("sigaction");
+    if (sigaction(SIGCHLD, &sa_chld, NULL) == -1) {
+        perror("sigaction SIGCHLD");
         exit(1);
     }
+
+    struct sigaction sa_usr1;
+    sa_usr1.sa_handler = handleParentProcess;
+    sigfillset(&sa_usr1.sa_mask);
+    sa_usr1.sa_flags = SA_RESTART;
+
+    if (sigaction(SIGUSR1, &sa_usr1, NULL) == -1) {
+        perror("sigaction SIGUSR1");
+        exit(1);
+    }
+
+    loadUsers("users.txt");
 
     if ((ssock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket()");
@@ -69,8 +81,6 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    signal(SIGUSR1, handleParentProcess);
-    
     do {
         clen = sizeof(cliaddr);
         int csock = accept(ssock, (struct sockaddr*) &cliaddr, &clen);
@@ -79,7 +89,7 @@ int main(int argc, char** argv) {
             perror("accept");
             continue;
         }
-
+        
         if (pipe(pipefds[clientCount]) == -1) {
             perror("pipe");
             close(csock);
@@ -118,20 +128,40 @@ int main(int argc, char** argv) {
 void handleParentProcess(int signo) {
     char buffer[BUFSIZ];
     int bytes;
+    printf("%d\n", clientCount);
 
     for (int i = 0; i < clientCount; i++) {
+        int pipeFlags = fcntl(pipefds[i][0], F_GETFL, 0);
+        fcntl(pipefds[i][0], F_SETFL, pipeFlags | O_NONBLOCK);
+
         bytes = read(pipefds[i][0], buffer, BUFSIZ);
-        if (bytes > 0) {
+        if (bytes < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            } else {
+                perror("read");
+                break;
+            }
+        } else if (bytes > 0) {
             buffer[bytes] = '\0';
         }
 
         for (int j = 0; j < clientCount; j++) {
-            if (j != i) {
-                write(clientSockets[j], buffer, sizeof(buffer));
-            }
-        }
-    }
+            int socketFlags = fcntl(clientSockets[j], F_GETFL, 0);
+            fcntl(clientSockets[j], F_SETFL, socketFlags | O_NONBLOCK);
 
+            if (j != i) {
+                int write_bytes = write(clientSockets[j], buffer, strlen(buffer));
+                if (write_bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                    continue;
+                }
+            }
+
+            fcntl(clientSockets[j], F_SETFL, socketFlags & ~O_NONBLOCK);
+        }
+
+        fcntl(pipefds[i][0], F_SETFL, pipeFlags & ~O_NONBLOCK);
+    }
 }
 
 void handleChildProcess(int clientIdx) {
@@ -147,10 +177,11 @@ void handleChildProcess(int clientIdx) {
         buffer[bytes] = '\0';
         
         if (strncmp(buffer, "MESSAGE", 7) == 0) {
-            char id[50], msg[1024], format[1024];
+            char id[50], msg[BUFSIZ], format[BUFSIZ];
             sscanf(buffer, "MESSAGE:%s %[^\n]", id, msg);
 
             sprintf(format, "%s: %s", id, msg);
+            printf("%s\n", format);
 
             write(pipefds[clientIdx][1], format, strlen(format));
             kill(getppid(), SIGUSR1);
@@ -164,15 +195,12 @@ void handleChildProcess(int clientIdx) {
                 write(clientSockets[clientIdx], &num, sizeof(int));
             } else if (strcmp(cmd, "SIGNUP") == 0) {
                 num = signupUser(first, second);
+                if (num == 1) printf("%s signed up.\n", first);
                 write(clientSockets[clientIdx], &num, sizeof(int));
             }
         }
-
-        
     }
 
     close(pipefds[clientIdx][1]);
     close(clientSockets[clientIdx]);
-
-    kill(getppid(), SIGUSR1);
 }
