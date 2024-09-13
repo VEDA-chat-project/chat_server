@@ -36,11 +36,6 @@ void daemonize() {
         exit(0);
     }
 
-    if (chdir("/") < 0) {
-        perror("chdir");
-        exit(1);
-    }
-
     umask(0);
 
     close(STDIN_FILENO);
