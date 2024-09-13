@@ -20,6 +20,9 @@ int clientSockets[MAX_CLIENTS];
 int clientCount = 0;
 
 int main(int argc, char** argv) {
+
+    daemonize();
+
     int ssock;
     socklen_t clen;
     struct sockaddr_in servaddr, cliaddr;
