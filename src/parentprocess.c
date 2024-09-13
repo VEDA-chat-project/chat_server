@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "parentprocess.h"
+#include "membermanager.h"
 
 extern int pipefds[MAX_CLIENTS][2];
 extern int clientSockets[MAX_CLIENTS];
@@ -46,9 +47,43 @@ void handleParentProcess(int signo) {
     }
 }
 
+void handleSignup(int signo) {
+    char buffer[BUFSIZ];
+    int bytes;
+
+    for (int i = 0; i < clientCount; i++) {
+        bytes = read(pipefds[i][0], buffer, BUFSIZ);
+        if (bytes < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            } else {
+                perror("read");
+                break;
+            }
+        } else if (bytes > 0) {
+            buffer[bytes] = '\0';
+        }
+
+        int clientIdx;
+        char id[50], password[50];
+        int result = sscanf(buffer, "%d %s %s", &clientIdx, id, password);
+
+        if (result != 3) continue;
+
+        int num = signupUser(id, password); // Sign up (success : 1), (fail : 0)
+        if (num == 1) printf("%s signed up.\n", id); // Sign up success
+        
+        if (write(clientSockets[clientIdx], &num, sizeof(int)) == -1) { // Send result to client
+            perror("write to client failed");
+        }
+    }
+}
+
 // prevent zombie process
 void sigchld_handler(int signum) {
-    while (waitpid(0, NULL, WNOHANG) > 0);
+    while (waitpid(0, NULL, WNOHANG) > 0) {
+        if (clientCount > 0) clientCount--;
+    }
 }
 
 // set up signal actions for SIGCHLD, SIGUSR1
@@ -70,6 +105,16 @@ void setupParentProcessSignals() {
 
     if (sigaction(SIGUSR1, &sa_usr1, NULL) == -1) {
         perror("sigaction SIGUSR1");
+        exit(1);
+    }
+
+    struct sigaction sa_usr2;
+    sa_usr2.sa_handler = handleSignup;
+    sigfillset(&sa_usr2.sa_mask);
+    sa_usr2.sa_flags = SA_RESTART;
+
+    if (sigaction(SIGUSR2, &sa_usr2, NULL) == -1) {
+        perror("sigaction SIGUSR2");
         exit(1);
     }
 }

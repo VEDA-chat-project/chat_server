@@ -41,6 +41,8 @@ void handleChildProcess(int clientIdx) {
             char id[50], msg[BUFSIZ], format[BUFSIZ];
             sscanf(buffer, "MESSAGE:%s %[^\n]", id, msg);
 
+            printf("%s\n", buffer);
+
             if (strncmp(msg, "exit", 4) == 0) {
                 printf("%s logged out.\n", id);
                 break;
@@ -52,7 +54,7 @@ void handleChildProcess(int clientIdx) {
             // send a message via pipe
             write(pipefds[clientIdx][1], format, strlen(format));
             kill(getppid(), SIGUSR1);
-        } else { // Manage members -> See membermanager.c code
+        } else {
             char cmd[10], first[BUFSIZ], second[BUFSIZ];
             sscanf(buffer, "%[^:]:%s %s", cmd, first, second);
             int num;
@@ -61,13 +63,17 @@ void handleChildProcess(int clientIdx) {
                 if (num == 1) printf("%s logged in.\n", first); // Log in success
                 write(clientSockets[clientIdx], &num, sizeof(int)); // Send result to client
             } else if (strcmp(cmd, "SIGNUP") == 0) {
-                num = signupUser(first, second); // Sign up (success : 1), (fail : 0)
-                if (num == 1) printf("%s signed up.\n", first); // Sign up success
-                write(clientSockets[clientIdx], &num, sizeof(int)); // Send result to client
+                char format[BUFSIZ];
+
+                sprintf(format, "%d %s %s", clientIdx, first, second);
+
+                if (write(pipefds[clientIdx][1], format, strlen(format)) == -1) {
+                    perror("write to pipe failed");
+                }
+                kill(getppid(), SIGUSR2);
+                break;
             }
         }
     }
 
-    close(pipefds[clientIdx][1]);
-    close(clientSockets[clientIdx]);
 }
