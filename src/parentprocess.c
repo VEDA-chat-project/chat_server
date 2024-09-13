@@ -18,9 +18,8 @@ void handleParentProcess(int signo) {
     char buffer[BUFSIZ];
     int bytes;
 
-    for (int i = 0; i < clientCount; i++) {
-        
-        bytes = read(pipefds[i][0], buffer, BUFSIZ);
+    for (int i = 0; i < clientCount; i++) { // for each file descriptor,
+        bytes = read(pipefds[i][0], buffer, BUFSIZ); // check if a message has arrived.
         if (bytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 continue;
@@ -32,8 +31,11 @@ void handleParentProcess(int signo) {
             buffer[bytes] = '\0';
         }
 
+        /*
+         * if a message has arrived,
+         * send the message to other clients via socket.
+         */
         for (int j = 0; j < clientCount; j++) {
-            
             if (j != i) {
                 int write_bytes = write(clientSockets[j], buffer, strlen(buffer));
                 if (write_bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
@@ -44,10 +46,12 @@ void handleParentProcess(int signo) {
     }
 }
 
+// prevent zombie process
 void sigchld_handler(int signum) {
     while (waitpid(0, NULL, WNOHANG) > 0);
 }
 
+// set up signal actions for SIGCHLD, SIGUSR1
 void setupParentProcessSignals() {
     struct sigaction sa_chld;
     sa_chld.sa_handler = sigchld_handler;

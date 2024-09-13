@@ -26,8 +26,15 @@ int main(int argc, char** argv) {
     pid_t pid;
     char mesg[BUFSIZ];
 
+    /*
+     * Set up signal handler for SIGCHLD, SIGUSR1
+     * See parentprocess.c code
+     */
     setupParentProcessSignals();
 
+    /*
+     * Load user data from "users.txt" in /build directory
+     */
     loadUsers("users.txt");
 
     if ((ssock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -65,6 +72,7 @@ int main(int argc, char** argv) {
             continue;
         }
 
+        // Non-blocking configuration for current client socket
         int socketFlags = fcntl(csock, F_GETFL, 0);
         fcntl(csock, F_SETFL, socketFlags | O_NONBLOCK);
         
@@ -74,6 +82,7 @@ int main(int argc, char** argv) {
             continue;
         }
 
+        // Non-blocking configuration for current file descriptors
         int pipeFlags = fcntl(pipefds[clientCount][0], F_GETFL, 0);
         fcntl(pipefds[clientCount][0], F_SETFL, pipeFlags | O_NONBLOCK);
 
@@ -91,11 +100,13 @@ int main(int argc, char** argv) {
             inet_ntop(AF_INET, &cliaddr.sin_addr, mesg, BUFSIZ);
             printf("Client is connected : %s\n", mesg);
 
+            // write-only pipe
             close(pipefds[clientCount][0]);
-            handleChildProcess(clientCount);
+            handleChildProcess(clientCount); // See childprocess.c code
             close(csock);
             exit(0);
         } else { // parent process
+            // read-only pipe
             close(pipefds[clientCount++][1]);
         }
 
