@@ -89,6 +89,9 @@ int main(int argc, char** argv) {
             perror("accept");
             continue;
         }
+
+        int socketFlags = fcntl(csock, F_GETFL, 0);
+        fcntl(csock, F_SETFL, socketFlags | O_NONBLOCK);
         
         if (pipe(pipefds[clientCount]) == -1) {
             perror("pipe");
@@ -96,8 +99,11 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        clientSockets[clientCount] = csock;
+        int pipeFlags = fcntl(pipefds[clientCount][0], F_GETFL, 0);
+        fcntl(pipefds[clientCount][0], F_SETFL, pipeFlags | O_NONBLOCK);
 
+        clientSockets[clientCount] = csock;
+        
         pid = fork();
 
         if (pid == -1) {
@@ -128,12 +134,9 @@ int main(int argc, char** argv) {
 void handleParentProcess(int signo) {
     char buffer[BUFSIZ];
     int bytes;
-    printf("%d\n", clientCount);
 
     for (int i = 0; i < clientCount; i++) {
-        int pipeFlags = fcntl(pipefds[i][0], F_GETFL, 0);
-        fcntl(pipefds[i][0], F_SETFL, pipeFlags | O_NONBLOCK);
-
+        
         bytes = read(pipefds[i][0], buffer, BUFSIZ);
         if (bytes < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -147,20 +150,14 @@ void handleParentProcess(int signo) {
         }
 
         for (int j = 0; j < clientCount; j++) {
-            int socketFlags = fcntl(clientSockets[j], F_GETFL, 0);
-            fcntl(clientSockets[j], F_SETFL, socketFlags | O_NONBLOCK);
-
+            
             if (j != i) {
                 int write_bytes = write(clientSockets[j], buffer, strlen(buffer));
                 if (write_bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                     continue;
                 }
             }
-
-            fcntl(clientSockets[j], F_SETFL, socketFlags & ~O_NONBLOCK);
         }
-
-        fcntl(pipefds[i][0], F_SETFL, pipeFlags & ~O_NONBLOCK);
     }
 }
 
@@ -170,15 +167,24 @@ void handleChildProcess(int clientIdx) {
 
     while (1) {
         bytes = read(clientSockets[clientIdx], buffer, BUFSIZ);
-        if (bytes <= 0) {
-            break;
+        if (bytes < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            } else {
+                perror("read");
+                break;
+            }
+        } else if (bytes > 0) {
+            buffer[bytes] = '\0';
         }
-
-        buffer[bytes] = '\0';
         
         if (strncmp(buffer, "MESSAGE", 7) == 0) {
             char id[50], msg[BUFSIZ], format[BUFSIZ];
             sscanf(buffer, "MESSAGE:%s %[^\n]", id, msg);
+
+            if (strncmp(msg, "exit", 4) == 0) {
+                break;
+            }
 
             sprintf(format, "%s: %s", id, msg);
             printf("%s\n", format);
