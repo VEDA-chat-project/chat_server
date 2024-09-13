@@ -7,6 +7,8 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 set(SOURCES
     ${CMAKE_SOURCE_DIR}/main.c
     ${CMAKE_SOURCE_DIR}/src/membermanager.c
+    ${CMAKE_SOURCE_DIR}/src/parentprocess.c
+    ${CMAKE_SOURCE_DIR}/src/childprocess.c
 )
 
 add_executable(chat_server ${SOURCES})
